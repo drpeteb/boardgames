@@ -36,7 +36,8 @@ class NoughtsAndCrossesBoard:
         |{}|{}|{}|
         -------
         |{}|{}|{}|
-        ------- """
+        -------
+        """
         entries = tuple(self.marks[self.state].flatten())
         print(message.format(*entries))
 
@@ -51,7 +52,8 @@ class NoughtsAndCrossesBoard:
         |{}|{}|{}|
         -------
         |{}|{}|{}|
-        ------- """
+        -------
+        """
         entries = tuple(self.index.flatten())
         print(message.format(*entries))
 
@@ -186,7 +188,7 @@ class HumanNoughtsAndCrossesPlayer(Player):
         """
         print("The board looks like this:")
         board.display_board()
-        print("")
+        print("You are {}".format(board.turn))
         board.display_index()
         move = input("Enter a letter to indicate where you would like to go: ")
         print(move)

@@ -63,8 +63,8 @@ class NoughtsAndCrossesBoard:
         """
         Calculates sums along all the rows, columns, and diagonals.
         """
-        row_sums = np.sum(self.state, axis=0)
-        col_sums = np.sum(self.state, axis=1)
+        row_sums = np.sum(self.state, axis=1)
+        col_sums = np.sum(self.state, axis=0)
         diag_sum1 = np.sum(np.diag(self.state), keepdims=True)
         diag_sum2 = np.sum(np.diag(self.state[:,::-1]), keepdims=True)
 
@@ -173,10 +173,12 @@ class NoughtsAndCrossesGame(Boardgame):
             move = plyr.move(self.board.copy())
             valid = self.board.verify(move)
             if not valid:
-                self._announce("Invalid move from player {}.".format(plyr.name))
+                self._announce("Invalid move from player {}.".format(
+                                                                    plyr.name))
             else:
                 self.board.move(move)
                 self._announce("Player {} made a move.".format(plyr.name))
+                self.board.display_board()
                 if self.board.over:
                     if self.board.winner == '.':
                         self._announce("It's a draw.")
@@ -241,6 +243,15 @@ class ExpertNoughtsAndCrossesPlayer(Player):
                   'corner',
                   'edge']
 
+    sum_elements = np.array([[0,1,2],
+                             [3,4,5],
+                             [6,7,8],
+                             [0,3,6],
+                             [1,4,7],
+                             [2,5,8],
+                             [0,4,8],
+                             [2,4,6]])
+
     def move(self, board):
         """
         Obtain a move
@@ -286,17 +297,14 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             # See if we made a threat
             if np.sum(sums == 2) == 1:
                 # Ensure that blocking the threat doesn't give away a fork
-                still_good = True
-                for omv in legal_moves:
-                    if omv != mv:
-                        obd = bd.copy()
-                        obd.move(omv)
-                        osums = -obd.turn*obd.sums
-                        if ((np.sum(osums == 2) == 2) and
-                            (np.sum(osums == -2) == 0)):
-                            still_good = False
-                            break
-                if still_good:
+                threat_group = self.sum_elements[sums == 2]
+                possible_fork = np.intersect1d(bd.permitted_moves,
+                                               threat_group)
+                obd = bd.copy()
+                obd.move(possible_fork)
+                osums = -obd.turn*obd.sums
+                if not ((np.sum(osums == 2) == 2) and
+                        (np.sum(osums == -2) == 0)):
                     options['threat'].append(mv)
 
             # Is it the centre? (and not the first play)
@@ -312,7 +320,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             if (mv in [0,2,6,8]):
                 options['corner'].append(mv)
 
-            # Is it an edge?
+        # Is it an edge?
             if (mv in [1,3,5,7,]):
                 options['edge'].append(mv)
 

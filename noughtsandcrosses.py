@@ -101,7 +101,7 @@ class NoughtsAndCrossesBoard:
             status = self._check_result()
             if status is not None:
                 self.over = True
-                self.winner = self.marks[status]
+                self.winner = status
                 self.turn = 0
             else:
                 self.turn = -self.turn
@@ -180,7 +180,7 @@ class NoughtsAndCrossesGame(Boardgame):
                 self._announce("Player {} made a move.".format(plyr.name))
                 self.board.display_board()
                 if self.board.over:
-                    if self.board.winner == '.':
+                    if self.board.winner == 0:
                         self._announce("It's a draw.")
                     else:
                         self._announce("Player {} wins!".format(plyr.name))
@@ -257,8 +257,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
         Obtain a move
         """
         #TODO Replace the inefficient dict with a nice named tuple
-        #TODO Find a more efficient way of doing the 'threat' strategy
-        
+
         options = dict()
         for st in self.strategies:
             options[st] = []
@@ -338,3 +337,69 @@ class ExpertNoughtsAndCrossesPlayer(Player):
 
         return move
 
+
+
+class LearningNoughtsAndCrossesPlayer(Player):
+    """
+    A learning computer player for noughts and crosses. Uses a neural net to
+    estimate the probability of winning from any state (when the opponent is
+    about to play).
+    """
+    def __init__(self, name):
+        """
+        Create the player.
+        """
+        self.name = name
+        self.neural_net = SimpleNeuralNet()
+
+    def move(self, board):
+        """
+        Obtain a move.
+        """
+        legal_moves = board.permitted_moves
+        prob = np.zeros(len(legal_moves),3)
+        
+        # Loop through possible moves
+        for mm in range(len(legal_moves)):
+            mv = legal_moves[mm]
+            bd = board.copy()
+            bd.move(mv)
+
+            # Estimate probability of winning
+            state = bd.state.flatten()
+            prob[mm,:] = self.neral_net.predict(state)
+
+        # Select the move which leads to the maximum 
+        move = legal_moves[np.argmax(prob[:,0])]
+
+        # Store the board for learning later
+        board.move(move)
+        self._game_history.append(board.state.flatten())
+
+        return move
+
+    def learn(self, winner):
+        """
+        Update net.
+        """
+        self.neural_net.update(self._game_history, winner)
+        
+    def connect(self, winner):
+        """
+        Connect player to a game.
+        """
+        if self._current_game is None:
+            self._current_game = game
+            self._game_history = []
+        else:
+            raise BoardgameError("Player {} is already"
+                                 " playing a game.".format(self.name))
+
+    def disconnect(self, game):
+        """
+        Disconnect from a game
+        """
+        if self._current_game is game:
+            self.learn(game.winner)
+            self._current_game = None
+            self._game_history = None

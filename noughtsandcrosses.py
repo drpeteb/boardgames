@@ -7,17 +7,26 @@ class NoughtsAndCrossesBoard:
     A Noughts and Crosses Board.
     Players moves are indicated in state using +1/-1.
     """
-    index = np.array([['a','b','c'],
-                      ['d','e','f'],
-                      ['g','h','i']])
+    index = np.array([[0,1,2],
+                      [3,4,5],
+                      [6,7,8]])
     marks = np.array(['.','X','O'])
+    board_string = """
+        -------
+        |{}|{}|{}|
+        -------
+        |{}|{}|{}|
+        -------
+        |{}|{}|{}|
+        -------
+        """
     
     def __init__(self):
         """
         Create the board
         """
         self.state = np.zeros((3,3),dtype=int)
-        self._next = 1
+        self.turn = 1
         self.over = False
 
     def copy(self):
@@ -30,40 +39,14 @@ class NoughtsAndCrossesBoard:
         """
         Display the board at the command line.
         """
-        message = """
-        -------
-        |{}|{}|{}|
-        -------
-        |{}|{}|{}|
-        -------
-        |{}|{}|{}|
-        -------
-        """
-        entries = tuple(self.marks[self.state].flatten())
-        print(message.format(*entries))
+        entries = self.marks[self.state]
+        print(self.board_string.format(*entries.flatten()))
 
-    def display_index(self):
+    def display_index(self, entries):
         """
         Display the input index at the command line.
         """
-        message = """
-        -------
-        |{}|{}|{}|
-        -------
-        |{}|{}|{}|
-        -------
-        |{}|{}|{}|
-        -------
-        """
-        entries = tuple(self.index.flatten())
-        print(message.format(*entries))
-
-    @property
-    def turn(self):
-        """
-        Indicate the mark of the player whose turn it is.
-        """
-        return self.marks[self._next]
+        print(self.board_string.format(*entries.flatten()))
 
     @property
     def permitted_moves(self):
@@ -71,12 +54,12 @@ class NoughtsAndCrossesBoard:
         Returns a list of legal moves
         """
         if not self.over:
-            return self.index[self.state==0]
+            return self.index[self.state == 0]
         else:
             return []
 
     @property
-    def _sums(self):
+    def sums(self):
         """
         Calculates sums along all the rows, columns, and diagonals.
         """
@@ -95,8 +78,8 @@ class NoughtsAndCrossesBoard:
         if self.over:
             return False
 
-        empty = (self.state == 0) 
-        if move not in self.index[empty]:
+        empty = self.index[self.state == 0]
+        if move not in empty:
             valid = False
         else:
             valid = True
@@ -109,18 +92,19 @@ class NoughtsAndCrossesBoard:
         if self.over:
             raise BoardgameError("The game is over")
 
-        empty = (self.state == 0)
-        if move not in self.index[empty]:
+        empty = self.index[self.state == 0]
+
+        if move not in empty:
             raise BoardgameError("That move is not valid")
         else:
-            self.state[self.index==move] = self._next
+            self.state[move == self.index] = self.turn
             status = self._check_result()
             if status is not None:
                 self.over = True
                 self.winner = self.marks[status]
-                self._next = 0
+                self.turn = 0
             else:
-                self._next = -self._next
+                self.turn = -self.turn
 
 
     def _check_result(self):
@@ -130,7 +114,7 @@ class NoughtsAndCrossesBoard:
         status = 0 indicates a draw
         status = None indicates the game is still in progress
         """
-        sums = self._sums
+        sums = self.sums
 
         # See if +1 has won
         if np.any(sums == 3):
@@ -175,17 +159,16 @@ class NoughtsAndCrossesGame(Boardgame):
         self.add_players(players)
         self.board = NoughtsAndCrossesBoard()
         shuffle = np.random.random_integers(0,1)
-        self.playermarks = {self.board.marks[1]:self.players[shuffle],
-                            self.board.marks[-1]:self.players[1-shuffle]}
+        self._order = [None, self.players[shuffle], self.players[1-shuffle]]
         self._announce("I flipped a coin and player {} will go first.".format(
-                self.playermarks[self.board.marks[1]].name))
+                self._order[1].name))
 
     def play_game(self):
         """
         Iterate fetching moves from each player.
         """
         while True:
-            plyr = self.playermarks[self.board.turn]
+            plyr = self._order[self.board.turn]
             self._announce("Player {}, please make a move.".format(plyr.name))
             move = plyr.move(self.board.copy())
             valid = self.board.verify(move)
@@ -208,6 +191,9 @@ class HumanNoughtsAndCrossesPlayer(Player):
     """
     Human player for noughts and crosses. Command line input.
     """
+    index = np.array([['a','b','c'],
+                      ['d','e','f'],
+                      ['g','h','i']])
 
     def move(self, board):
         """
@@ -215,9 +201,14 @@ class HumanNoughtsAndCrossesPlayer(Player):
         """
         print("The board looks like this:")
         board.display_board()
-        print("You are {}".format(board.turn))
-        board.display_index()
-        move = input("Enter a letter to indicate where you would like to go: ")
+        print("You are {}".format(board.marks[board.turn]))
+        board.display_index(self.index)
+        move = None
+        while move is None:
+            pick = input("Enter a letter to indicate "
+                         "where you would like to go: ")
+            if pick in self.index:
+                move = board.index[pick == self.index][0]
         return move
 
 
@@ -254,6 +245,9 @@ class ExpertNoughtsAndCrossesPlayer(Player):
         """
         Obtain a move
         """
+        #TODO Replace the inefficient dict with a nice named tuple
+        #TODO Find a more efficient way of doing the 'threat' strategy
+        
         options = dict()
         for st in self.strategies:
             options[st] = []
@@ -263,7 +257,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
         # Loop through the opponents possible moves
         for mv in legal_moves:
             bd = board.copy()
-            bd._next *= -1
+            bd.turn = -bd.turn
             bd.move(mv)
 
             # See if they won (or if it was a draw)
@@ -271,7 +265,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
                 options['block'].append(mv)
 
             # See if they made a fork
-            sums = -bd._next*bd._sums
+            sums = -bd.turn*bd.sums
             if np.sum(sums == 2) == 2:
                 options['spoon'].append(mv)
 
@@ -285,7 +279,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
                 options['win'].append(mv)
 
             # See if we made a fork
-            sums = -bd._next*bd._sums
+            sums = -bd.turn*bd.sums
             if np.sum(sums == 2) == 2:
                 options['fork'].append(mv)
 
@@ -297,7 +291,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
                     if omv != mv:
                         obd = bd.copy()
                         obd.move(omv)
-                        osums = -obd._next*obd._sums
+                        osums = -obd.turn*obd.sums
                         if ((np.sum(osums == 2) == 2) and
                             (np.sum(osums == -2) == 0)):
                             still_good = False
@@ -305,25 +299,24 @@ class ExpertNoughtsAndCrossesPlayer(Player):
                 if still_good:
                     options['threat'].append(mv)
 
-            mvidx = np.where(mv == board.index.flatten())[0][0]
-
             # Is it the centre? (and not the first play)
-            if ((mvidx == 4) and (np.sum(np.abs(board.state)) > 0)):
+            if ((mv == 4) and (np.sum(np.abs(board.state)) > 0)):
                 options['centre'].append(mv)
 
             # Is it an opposite corner?
-            if ((mvidx in [0,2,6,8]) and 
-                (np.sum(bd.state.flatten()[[mvidx,8-mvidx]]) == 0)):
+            if ((mv in [0,2,6,8]) and 
+                (np.sum(bd.state.flatten()[[mv,8-mv]]) == 0)):
                     options['opposite'].append(mv)
 
             # Is it a corner?
-            if (mvidx in [0,2,6,8]):
+            if (mv in [0,2,6,8]):
                 options['corner'].append(mv)
 
             # Is it an edge?
-            if (mvidx in [1,3,5,7,]):
+            if (mv in [1,3,5,7,]):
                 options['edge'].append(mv)
 
+        #print(options)
 
         # Decide which option to take
         move = None
@@ -332,9 +325,8 @@ class ExpertNoughtsAndCrossesPlayer(Player):
                 move = np.random.choice(options[st])
                 break
 
-        if not move:
+        if move is None:
             raise BoardgameError("Failed to find an appropriate move.")
 
-        #print(options)
         return move
 

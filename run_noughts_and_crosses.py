@@ -3,9 +3,9 @@ from noughtsandcrosses import (NoughtsAndCrossesGame,
                                DumbNoughtsAndCrossesPlayer,
                                ExpertNoughtsAndCrossesPlayer)
 
-player1 = HumanNoughtsAndCrossesPlayer("Pete")
+#player1 = HumanNoughtsAndCrossesPlayer("Pete")
 #player2 = HumanNoughtsAndCrossesPlayer("Katy")
-#player2 = DumbNoughtsAndCrossesPlayer("Colin")
+player1 = DumbNoughtsAndCrossesPlayer("Colin")
 player2 = ExpertNoughtsAndCrossesPlayer("Horatio")
 
 game = NoughtsAndCrossesGame([player1,player2])

@@ -266,7 +266,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             bd._next *= -1
             bd.move(mv)
 
-            # See if they won
+            # See if they won (or if it was a draw)
             if bd.over:
                 options['block'].append(mv)
 
@@ -280,7 +280,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             bd = board.copy()
             bd.move(mv)
 
-            # See if we won
+            # See if we won (or it was a draw)
             if bd.over:
                 options['win'].append(mv)
 
@@ -289,12 +289,21 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             if np.sum(sums == 2) == 2:
                 options['fork'].append(mv)
 
-#            # See if we made a threat
-#            col,row = np.where(mv == board.index)
-#            rowsum = np.sum(bd.state[col,:])
-#            colsum = np.sum(bd.state[:,row])
-#            if 
-#            diag
+            # See if we made a threat
+            if np.sum(sums == 2) == 1:
+                # Ensure that blocking the threat doesn't give away a fork
+                still_good = True
+                for omv in legal_moves:
+                    if omv != mv:
+                        obd = bd.copy()
+                        obd.move(omv)
+                        osums = -obd._next*obd._sums
+                        if ((np.sum(osums == 2) == 2) and
+                            (np.sum(osums == -2) == 0)):
+                            still_good = False
+                            break
+                if still_good:
+                    options['threat'].append(mv)
 
             mvidx = np.where(mv == board.index.flatten())[0][0]
 
@@ -326,6 +335,6 @@ class ExpertNoughtsAndCrossesPlayer(Player):
         if not move:
             raise BoardgameError("Failed to find an appropriate move.")
 
-        print(options)
+        #print(options)
         return move
 

@@ -23,8 +23,9 @@ class Boardgame:
     game_name = "Abstract Game"
     _player_limit = None
 
-    def __init__(self):
+    def __init__(self, verbosity=1):
         self._generate_id()
+        self.verbosity = verbosity
 
     def _generate_id(self):
         """
@@ -33,11 +34,12 @@ class Boardgame:
         self.game_id = ''.join(random.choice(string.ascii_uppercase) for \
                                                             _ in range(10))
 
-    def _announce(self, message):
+    def _announce(self, message, v=1):
         """
         Make an announcement
         """
-        print('\n'+message+'\n')
+        if (v <= self.verbosity):
+            print('\n'+message+'\n')
 
     def _notify(self, event, info=None):
         """

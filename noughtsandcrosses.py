@@ -151,10 +151,11 @@ class NoughtsAndCrossesGame(Boardgame):
     game_name = "Noughts & Crosses"
     _player_limit = 2
 
-    def __init__(self, players):
+    def __init__(self, players, verbosity=1):
         """
         Add players. Create the board. Decide who starts.
         """
+        self.verbosity = verbosity
         self._generate_id()
         self.players = []
         self.add_players(players)
@@ -163,11 +164,11 @@ class NoughtsAndCrossesGame(Boardgame):
         self.board = NoughtsAndCrossesBoard()
         shuffle = np.random.random_integers(0,1)
         self._order = [None, self.players[shuffle], self.players[1-shuffle]]
-        self._announce("Beginning Noughts and Crosses game: {}".format(
-                self.game_id))
-        self._announce("I flipped a coin to decide who starts. "
-                       "Player {} will go first and be X.".format(
-                self._order[1].name))
+        self._announce("Beginning Noughts and Crosses game: {}. "
+                       "{} vs. {}. "
+                       "{} will go first and be X.".format(
+                        self.game_id, self.players[0].name,
+                        self.players[1].name, self._order[1].name), v=1)
 
     def play_game(self):
         """
@@ -176,24 +177,29 @@ class NoughtsAndCrossesGame(Boardgame):
         self._notify("begin")
         while True:
             plyr = self._order[self.board.turn]
-            self._announce("Player {}, please make a move.".format(plyr.name))
+            self._announce("Player {}, please make a move.".format(
+                                                            plyr.name), v=3)
             move = plyr.move(self.board.copy())
             valid = self.board.verify(move)
             if not valid:
                 self._announce("Invalid move from player {}.".format(
-                                                                    plyr.name))
+                                                            plyr.name), v=3)
             else:
                 self.board.move(move)
-                self._announce("Player {} made a move.".format(plyr.name))
-                self.board.display_board()
+                self._announce("Player {} made a move.".format(
+                                                            plyr.name), v=3)
+                if (self.verbosity >= 3):
+                    self.board.display_board()
                 if self.board.over:
                     if self.board.winner == 0:
                         self.winner = "Draw"
-                        self._announce("It's a draw.")
+                        self._announce("It's a draw.", v=2)
                     else:
                         self.winner = self._order[self.board.winner].name
-                        self._announce("Player {} wins!".format(plyr.name))
-                    self.board.display_board()
+                        self._announce("Player {} wins!".format(
+                                                            plyr.name), v=2)
+                    if (self.verbosity >= 2):
+                        self.board.display_board()
                     self._notify("finish", self.board.winner)
                     self.remove_players()
                     break
@@ -235,6 +241,55 @@ class DumbNoughtsAndCrossesPlayer(Player):
         """ 
         legal_moves = board.permitted_moves
         move = np.random.choice(legal_moves)
+        return move
+
+
+class NaiveNoughtsAndCrossesPlayer(Player):
+    """
+    A somewhat naive computer player for noughts and crosses. Knows to win
+    or block if possible. Otherwise plays randomly.
+    """
+    strategies = ['win', 'block']
+   
+    def move(self, board):
+        """
+        Obtain a move.
+        """ 
+        options = dict()
+        for st in self.strategies:
+            options[st] = []
+
+        legal_moves = board.permitted_moves
+        
+        # Loop through the opponents possible moves
+        for mv in legal_moves:
+            bd = board.copy()
+            bd.turn = -bd.turn
+            bd.move(mv)
+
+            # See if they won (or if it was a draw)
+            if bd.over:
+                options['block'].append(mv)
+
+        # Loop through possible moves to check strategies
+        for mv in legal_moves:
+            bd = board.copy()
+            bd.move(mv)
+
+            # See if we won (or it was a draw)
+            if bd.over:
+                options['win'].append(mv)
+
+        # Decide which option to take
+        move = None
+        for st in self.strategies:
+            if options[st]:
+                move = np.random.choice(options[st])
+                break
+
+        if move is None:
+            move = np.random.choice(legal_moves)
+
         return move
 
 
@@ -336,7 +391,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             if (mv in [1,3,5,7,]):
                 options['edge'].append(mv)
 
-        print(options)
+        #print(options)
 
         # Decide which option to take
         move = None
@@ -412,8 +467,8 @@ class LearningNoughtsAndCrossesPlayer(Player):
             state = board.turn * bd.state.flatten()[np.newaxis,:]
             prob[mm,:] = self.neural_net.predict(state/16.0)
             
-            print("Log-probability of 0/+1/-1 victory if I make move {} "
-                  "is {}/{}/{}.".format(state, *prob[mm,:]))
+            #print("Log-probability of 0/+1/-1 victory if I make move {} "
+            #      "is {}/{}/{}.".format(state, *prob[mm,:]))
 
         # Decide which option to take
         move = None

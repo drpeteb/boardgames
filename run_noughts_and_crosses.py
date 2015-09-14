@@ -5,17 +5,23 @@ from boardgame import BoardgameError
 from noughtsandcrosses import (NoughtsAndCrossesGame,
                                HumanNoughtsAndCrossesPlayer,
                                DumbNoughtsAndCrossesPlayer,
+                               NaiveNoughtsAndCrossesPlayer,
                                LearningNoughtsAndCrossesPlayer,
                                ExpertNoughtsAndCrossesPlayer)
 
-np.random.seed(seed=3)
+np.random.seed(seed=5)
 
 #player1 = HumanNoughtsAndCrossesPlayer("Pete")
 #player2 = HumanNoughtsAndCrossesPlayer("Katy")
 #player1 = DumbNoughtsAndCrossesPlayer("Colin")
+#player1 = NaiveNoughtsAndCrossesPlayer("Hubert")
 #player1 = ExpertNoughtsAndCrossesPlayer("Persephone")
 player1 = ExpertNoughtsAndCrossesPlayer("Horatio")
+#player = LearningNoughtsAndCrossesPlayer("Franklin")
 player2 = LearningNoughtsAndCrossesPlayer("Franklin")
+#opponents = [NaiveNoughtsAndCrossesPlayer("Hubert"), \
+#             ExpertNoughtsAndCrossesPlayer("Horatio")]
+#opponents = [ExpertNoughtsAndCrossesPlayer("Horatio")]
 
 result = []
 
@@ -23,7 +29,10 @@ num_games = 500
 num_eval = 50
 
 for gg in range(num_games):
-    game = NoughtsAndCrossesGame([player1,player2])
+    if (((gg+1)%100) == 0):
+        print("Played {} of {} games.".format(gg+1, num_games))
+    #game = NoughtsAndCrossesGame([player,opponents[gg%1]], verbosity=0)
+    game = NoughtsAndCrossesGame([player1, player2], verbosity=0)
     game.play_game()
     if game.winner == "Franklin":
         result.append(1)

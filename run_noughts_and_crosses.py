@@ -8,6 +8,8 @@ from noughtsandcrosses import (NoughtsAndCrossesGame,
                                LearningNoughtsAndCrossesPlayer,
                                ExpertNoughtsAndCrossesPlayer)
 
+np.random.seed(seed=1)
+
 #player1 = HumanNoughtsAndCrossesPlayer("Pete")
 #player2 = HumanNoughtsAndCrossesPlayer("Katy")
 #player1 = DumbNoughtsAndCrossesPlayer("Colin")
@@ -17,8 +19,8 @@ player2 = LearningNoughtsAndCrossesPlayer("Franklin")
 
 result = []
 
-num_games = 10000
-num_eval = 1000
+num_games = 1000
+num_eval = 100
 
 for gg in range(num_games):
     game = NoughtsAndCrossesGame([player1,player2])

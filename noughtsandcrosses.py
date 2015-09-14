@@ -1,6 +1,6 @@
 from copy import deepcopy
 import numpy as np
-from boardgame import Boardgame, Player, BoardgameError
+from boardgame import Boardgame, Player, BoardgameError, BoardgameNeuralNet
 
 class NoughtsAndCrossesBoard:
     """
@@ -155,18 +155,25 @@ class NoughtsAndCrossesGame(Boardgame):
         """
         Add players. Create the board. Decide who starts.
         """
+        self._generate_id()
         self.players = []
         self.add_players(players)
+        if (len(self.players) != 2):
+            raise BoardgameError("Must have 2 players for Noughts and Crosses")
         self.board = NoughtsAndCrossesBoard()
         shuffle = np.random.random_integers(0,1)
         self._order = [None, self.players[shuffle], self.players[1-shuffle]]
-        self._announce("I flipped a coin and player {} will go first.".format(
+        self._announce("Beginning Noughts and Crosses game: {}".format(
+                self.game_id))
+        self._announce("I flipped a coin to decide who starts."
+                       "Player {} will go first and be X.".format(
                 self._order[1].name))
 
     def play_game(self):
         """
         Iterate fetching moves from each player.
         """
+        self._notify("begin")
         while True:
             plyr = self._order[self.board.turn]
             self._announce("Player {}, please make a move.".format(plyr.name))
@@ -185,7 +192,8 @@ class NoughtsAndCrossesGame(Boardgame):
                     else:
                         self._announce("Player {} wins!".format(plyr.name))
                     self.board.display_board()
-                    self.remove_players(self.players)
+                    self._notify("finish", self.board.winner)
+                    self.remove_players()
                     break
 
 
@@ -350,14 +358,14 @@ class LearningNoughtsAndCrossesPlayer(Player):
         Create the player.
         """
         self.name = name
-        self.neural_net = SimpleNeuralNet()
+        self.neural_net = BoardgameNeuralNet(num_inputs=9)
 
     def move(self, board):
         """
         Obtain a move.
         """
         legal_moves = board.permitted_moves
-        prob = np.zeros(len(legal_moves),3)
+        prob = np.zeros((len(legal_moves),3))
         
         # Loop through possible moves
         for mm in range(len(legal_moves)):
@@ -366,10 +374,15 @@ class LearningNoughtsAndCrossesPlayer(Player):
             bd.move(mv)
 
             # Estimate probability of winning
-            state = bd.state.flatten()
-            prob[mm,:] = self.neral_net.predict(state)
+            state = board.turn * bd.state.flatten()[np.newaxis,:]
+            prob[mm,:] = self.neural_net.predict(state)
+            
+            print("Probability of win/draw/lose if I make move{} is {}/{}/{}."\
+                                                .format(state, *prob[mm,:]))
 
-        # Select the move which leads to the maximum 
+        # Select the move which leads to the maximum probability of winning
+        #TODO Would the minimum probability of losing be better? Or some
+        #     combination of the two? Like win_prob - lose_prob?
         move = legal_moves[np.argmax(prob[:,0])]
 
         # Store the board for learning later
@@ -382,24 +395,31 @@ class LearningNoughtsAndCrossesPlayer(Player):
         """
         Update net.
         """
-        self.neural_net.update(self._game_history, winner)
-        
-    def connect(self, winner):
-        """
-        Connect player to a game.
-        """
-        if self._current_game is None:
-            self._current_game = game
-            self._game_history = []
-        else:
-            raise BoardgameError("Player {} is already"
-                                 " playing a game.".format(self.name))
+        # Parse the game history to make training data
+        states = np.array(self._game_history)
+        output = np.zeros(3)
+        output[winner] = 1
 
-    def disconnect(self, game):
+        # Add symmetric equivalents
+        states = self.symmetric_equivalents(states)
+
+        # Update the net
+        self.neural_net.update(states, winner)
+
+    def notify(self, event, info):
         """
-        Disconnect from a game
+        Act on an event notification from the game.
         """
-        if self._current_game is game:
-            self.learn(game.winner)
-            self._current_game = None
-            self._game_history = None
+        if (event == "begin"):
+            self._game_history = []
+        elif (event == "finish"):
+            self.learn(info)
+        else:
+            pass
+
+    def symmetric_equivalents(self, states):
+        """
+        Add symmetrically identical states to an array of game states.
+        """
+        #TODO Write this function
+        pass

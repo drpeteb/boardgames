@@ -121,8 +121,6 @@ class Player:
         pass
 
 
-#TODO Initialise the weights properly
-
 
 Layer = namedtuple('Layer', ['weight', 'bias'])
 

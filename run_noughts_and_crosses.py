@@ -8,7 +8,7 @@ from noughtsandcrosses import (NoughtsAndCrossesGame,
                                LearningNoughtsAndCrossesPlayer,
                                ExpertNoughtsAndCrossesPlayer)
 
-np.random.seed(seed=1)
+np.random.seed(seed=3)
 
 #player1 = HumanNoughtsAndCrossesPlayer("Pete")
 #player2 = HumanNoughtsAndCrossesPlayer("Katy")
@@ -19,8 +19,8 @@ player2 = LearningNoughtsAndCrossesPlayer("Franklin")
 
 result = []
 
-num_games = 1000
-num_eval = 100
+num_games = 500
+num_eval = 50
 
 for gg in range(num_games):
     game = NoughtsAndCrossesGame([player1,player2])
@@ -35,6 +35,13 @@ for gg in range(num_games):
 #    if game.winner == "Franklin":
 #        raise BoardgameError("Horatio should be unbeatable!!")
 
+if result[0] == 1:
+    print("First game was won by Franklin.")
+elif result[0] == 0:
+    print("First game was drawn by Franklin.")
+elif result[0] == -1:
+    print("First game was lost by Franklin.")
+    
 print("Franklin won {}\% of the first {} games.".format(
                     100*np.mean(np.array(result[:num_eval]) == 1), num_eval))
 print("Franklin drew {}\% of the first {} games.".format(

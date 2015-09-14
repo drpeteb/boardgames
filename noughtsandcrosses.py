@@ -165,7 +165,7 @@ class NoughtsAndCrossesGame(Boardgame):
         self._order = [None, self.players[shuffle], self.players[1-shuffle]]
         self._announce("Beginning Noughts and Crosses game: {}".format(
                 self.game_id))
-        self._announce("I flipped a coin to decide who starts."
+        self._announce("I flipped a coin to decide who starts. "
                        "Player {} will go first and be X.".format(
                 self._order[1].name))
 
@@ -188,8 +188,10 @@ class NoughtsAndCrossesGame(Boardgame):
                 self.board.display_board()
                 if self.board.over:
                     if self.board.winner == 0:
+                        self.winner = "Draw"
                         self._announce("It's a draw.")
                     else:
+                        self.winner = self._order[self.board.winner].name
                         self._announce("Player {} wins!".format(plyr.name))
                     self.board.display_board()
                     self._notify("finish", self.board.winner)
@@ -271,6 +273,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             options[st] = []
 
         legal_moves = board.permitted_moves
+        fork_danger = False
         
         # Loop through the opponents possible moves
         for mv in legal_moves:
@@ -285,6 +288,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             # See if they made a fork
             sums = -bd.turn*bd.sums
             if np.sum(sums == 2) == 2:
+                fork_danger = True
                 options['spoon'].append(mv)
 
         # Loop through possible moves to check strategies
@@ -302,17 +306,18 @@ class ExpertNoughtsAndCrossesPlayer(Player):
                 options['fork'].append(mv)
 
             # See if we made a threat
-            if np.sum(sums == 2) == 1:
-                # Ensure that blocking the threat doesn't give away a fork
-                threat_group = self.sum_elements[sums == 2]
-                possible_fork = np.intersect1d(bd.permitted_moves,
-                                               threat_group)
-                obd = bd.copy()
-                obd.move(possible_fork)
-                osums = -obd.turn*obd.sums
-                if not ((np.sum(osums == 2) == 2) and
-                        (np.sum(osums == -2) == 0)):
-                    options['threat'].append(mv)
+            if fork_danger:
+                if np.sum(sums == 2) == 1:
+                    # Ensure that blocking the threat doesn't give away a fork
+                    threat_group = self.sum_elements[sums == 2]
+                    possible_fork = np.intersect1d(bd.permitted_moves,
+                                                   threat_group)
+                    obd = bd.copy()
+                    obd.move(possible_fork)
+                    osums = -obd.turn*obd.sums
+                    if not ((np.sum(osums == 2) == 2) and
+                            (np.sum(osums == -2) == 0)):
+                        options['threat'].append(mv)
 
             # Is it the centre? (and not the first play)
             if ((mv == 4) and (np.sum(np.abs(board.state)) > 0)):
@@ -331,7 +336,7 @@ class ExpertNoughtsAndCrossesPlayer(Player):
             if (mv in [1,3,5,7,]):
                 options['edge'].append(mv)
 
-        #print(options)
+        print(options)
 
         # Decide which option to take
         move = None
@@ -353,12 +358,25 @@ class LearningNoughtsAndCrossesPlayer(Player):
     estimate the probability of winning from any state (when the opponent is
     about to play).
     """
+    strategies = ["win", "block"]
+    symmetry_maps = np.array([[2,5,8,1,4,7,0,3,6],
+                              [8,7,6,5,4,3,2,1,0],
+                              [6,3,0,7,4,1,8,5,2],
+                              [6,7,8,3,4,5,0,1,2],
+                              [2,1,0,5,4,3,8,7,6],
+                              [0,3,6,1,4,7,2,5,8],
+                              [8,5,2,7,4,1,6,3,0]])
+
     def __init__(self, name):
         """
         Create the player.
         """
         self.name = name
-        self.neural_net = BoardgameNeuralNet(num_inputs=9)
+        self.neural_net = BoardgameNeuralNet(num_inputs=9,
+                                             num_hidden_layers=2,
+                                             num_hidden_units=[200,200],
+                                             step_size=1E-1,
+                                             regulariser=1E-4)
 
     def move(self, board):
         """
@@ -366,24 +384,48 @@ class LearningNoughtsAndCrossesPlayer(Player):
         """
         legal_moves = board.permitted_moves
         prob = np.zeros((len(legal_moves),3))
-        
+        options = dict()
+        for st in self.strategies:
+            options[st] = []
+
+        # Loop through the opponents possible moves
+        for mv in legal_moves:
+            bd = board.copy()
+            bd.turn = -bd.turn
+            bd.move(mv)
+
+            # See if they won (or if it was a draw)
+            if bd.over:
+                options['block'].append(mv)
+
         # Loop through possible moves
         for mm in range(len(legal_moves)):
             mv = legal_moves[mm]
             bd = board.copy()
             bd.move(mv)
 
+            # See if we won (or it was a draw)
+            if bd.over:
+                options['win'].append(mv)
+
             # Estimate probability of winning
             state = board.turn * bd.state.flatten()[np.newaxis,:]
             prob[mm,:] = self.neural_net.predict(state)
             
-            print("Probability of win/draw/lose if I make move{} is {}/{}/{}."\
-                                                .format(state, *prob[mm,:]))
+            print("Log-probability of 0/+1/-1 victory if I make move {} "
+                  "is {}/{}/{}.".format(state, *prob[mm,:]))
 
-        # Select the move which leads to the maximum probability of winning
-        #TODO Would the minimum probability of losing be better? Or some
-        #     combination of the two? Like win_prob - lose_prob?
-        move = legal_moves[np.argmax(prob[:,0])]
+        # Decide which option to take
+        move = None
+        for st in self.strategies:
+            if options[st]:
+                move = np.random.choice(options[st])
+                break
+
+        if move is None:
+            # Select the move which maximises prob(win)/prob(lose)
+            prob_diff = prob[:,board.turn]-prob[:,-board.turn]
+            move = legal_moves[np.argmax(prob_diff)]
 
         # Store the board for learning later
         board.move(move)
@@ -397,14 +439,11 @@ class LearningNoughtsAndCrossesPlayer(Player):
         """
         # Parse the game history to make training data
         states = np.array(self._game_history)
-        output = np.zeros(3)
-        output[winner] = 1
-
-        # Add symmetric equivalents
         states = self.symmetric_equivalents(states)
+        outputs = winner*np.ones(states.shape[0], dtype=int)
 
         # Update the net
-        self.neural_net.update(states, winner)
+        self.neural_net.update(states, outputs)
 
     def notify(self, event, info):
         """
@@ -421,5 +460,19 @@ class LearningNoughtsAndCrossesPlayer(Player):
         """
         Add symmetrically identical states to an array of game states.
         """
-        #TODO Write this function
-        pass
+        for state in states.copy():
+            symmetries = self.symmetries(state)
+            for sym in symmetries:
+                if not np.any((states==sym).all(axis=1)):
+                    states = np.vstack((states, sym))
+        return states
+
+    def symmetries(self, state):
+        """
+        Make a list of all the states obtainable by reflecting or rotating
+        a base state.
+        """
+        syms = []
+        for ii in range(7):
+            syms.append(state[self.symmetry_maps[ii,:]])
+        return syms

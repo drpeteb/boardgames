@@ -1,9 +1,11 @@
 from abc import ABCMeta, abstractmethod
-from collections import namedtuple
+from collections import namedtuple, deque
 import string
 import random
 
 import numpy as np
+import scipy as sp
+import scipy.misc as spmisc
 
 
 class BoardgameError(ValueError):
@@ -136,8 +138,8 @@ class BoardgameNeuralNet:
                  num_inputs=10,
                  num_hidden_layers=1,
                  num_hidden_units=[100],
-                 step_size=1E-3,
-                 regulariser=1E-3,
+                 step_size=1E-1,
+                 regulariser=1E-4,
                  ):
         """
         Initialise the net.
@@ -157,16 +159,22 @@ class BoardgameNeuralNet:
 
         self.layers = []
 
-        self.layers.append(Layer(
-                            np.random.randn(num_inputs, num_hidden_units[0]),
-                            np.zeros(num_hidden_units[0])))
+        self.layers.append(self.initialise_layer(num_inputs,
+                                                    num_hidden_units[0]))
         for ii in range(num_hidden_layers-1):                                
-            self.layers.append(Layer(
-                            np.random.randn(num_inputs, num_hidden_units[0]),
-                            np.zeros(num_hidden_units[0])))
-        self.layers.append(Layer(
-                            np.random.randn(num_hidden_units[-1], 3),
-                            np.zeros(3)))
+            self.layers.append(self.initialise_layer(num_hidden_units[ii],
+                                                    num_hidden_units[ii+1]))
+        self.layers.append(self.initialise_layer(num_hidden_units[-1], 3))        
+
+        self.cost_sequence = []
+
+    def initialise_layer(self, num_in, num_out):
+        """
+        Randomly initialise weights and biases for a layer
+        """
+        weight = np.random.randn(num_in, num_out)/np.sqrt(num_in)
+        bias = np.zeros(num_out)
+        return Layer(weight, bias)
         
     def predict(self, X):
         """
@@ -183,14 +191,60 @@ class BoardgameNeuralNet:
                 output = np.maximum(0, output)
 
         # Output layer
-        output -= np.max(output)        # Prevents overflow
-        prob = np.exp(output)
-        prob /= np.sum(prob)
+        output -= np.max(output, axis=1, keepdims=True)    # Prevents overflow
+        log_prob = output - spmisc.logsumexp(output, axis=1, keepdims=True)
 
-        return prob
+        return log_prob
 
-    def update():
+    def update(self, X, y):
         """
         Update using back propagation
         """
-        pass
+        N,D = X.shape
+
+        # Propagate through network
+        layer_output = [X]
+        output = X
+        for ii in range(self.num_hidden_layers+1):
+            output = np.dot(output, self.layers[ii].weight) \
+                                                        + self.layers[ii].bias
+            layer_output.append(output.copy())
+            if (ii <= self.num_hidden_layers):
+                output = np.maximum(0, output)
+
+        # Output layer
+        output -= np.max(output, axis=1, keepdims=True)    # Prevents overflow
+        log_prob = output - spmisc.logsumexp(output, axis=1, keepdims=True)
+        truth_log_prob = log_prob[range(N), y]
+        cost = -np.sum(truth_log_prob)/N
+        for layer in self.layers:
+            cost += 0.5 * self.regulariser * np.sum(layer.weight**2)
+        self.cost_sequence.append(cost)
+
+        # Back propagation
+        d_out = np.exp(log_prob)
+        d_out[range(N), y] -= 1
+        d_layer_output = d_out
+        d_layer_params = deque([])
+        for ii in reversed(range(self.num_hidden_layers+1)):
+            dW = np.dot(layer_output[ii].T, d_layer_output)/N \
+                    + self.regulariser*self.layers[ii].weight
+            db = np.sum(d_layer_output, axis=0)/N
+            d_layer_params.appendleft(Layer(dW, db))
+
+            if ii > 0:
+                d_layer_output = np.dot(d_layer_output,
+                                                    self.layers[ii].weight.T)
+                d_layer_output[layer_output[ii]<0] = 0
+
+        # Check for infinities
+        for dl in d_layer_params:
+            if (np.any(np.isinf(dl.weight)) or np.any(np.isinf(dl.bias))):
+                print(d_layer_params)
+                raise ValueError("Infinities in the parameter derivatives.") 
+        
+        # Training update
+        for ii in range(self.num_hidden_layers+1):
+            self.layers[ii].weight[:] -= self.step_size*d_layer_params[ii].weight
+            self.layers[ii].bias[:] -= self.step_size*d_layer_params[ii].bias
+        

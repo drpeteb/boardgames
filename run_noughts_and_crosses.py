@@ -35,7 +35,9 @@ for gg in range(num_games):
         print("Played {} of {} games.".format(gg+1, num_games))
     #if gg > 500:
     #    idx = 1 - idx
-    idx = 1 - idx
+    #if ((gg+1)%50) == 0:
+    #    idx = 1 - idx
+    #idx = 1 - idx
     game = NoughtsAndCrossesGame([player,opponents[idx]], verbosity=0)
     #game = NoughtsAndCrossesGame([player1, player2], verbosity=0)
     game.play_game()

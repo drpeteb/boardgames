@@ -429,10 +429,10 @@ class LearningNoughtsAndCrossesPlayer(Player):
         self.name = name
         self.input_scale = 16.0
         self.neural_net = BoardgameNeuralNet(num_inputs=9,
-                                             num_hidden_layers=2,
-                                             num_hidden_units=[100,100],
-                                             step_size=1E-1,
-                                             regulariser=1E-2)
+                                             num_hidden_layers=1,
+                                             num_hidden_units=[250],
+                                             step_size=3E-1,
+                                             regulariser=3E-2)
 
     def move(self, board):
         """

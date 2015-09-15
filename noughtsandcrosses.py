@@ -427,12 +427,16 @@ class LearningNoughtsAndCrossesPlayer(Player):
         Create the player.
         """
         self.name = name
+        self.learning = True
         self.input_scale = 16.0
+        self.selectivity = 0.0
         self.neural_net = BoardgameNeuralNet(num_inputs=9,
                                              num_hidden_layers=1,
                                              num_hidden_units=[250],
                                              step_size=3E-1,
                                              regulariser=3E-2)
+                                             #momentum=0.0,
+                                             #dropout_rate=0)
 
     def move(self, board):
         """
@@ -479,13 +483,18 @@ class LearningNoughtsAndCrossesPlayer(Player):
                 break
 
         if move is None:
-            # Select the move which minimises the probability of losing
-            #cost_func = prob[:,-board.turn]
-            #cost_func = -prob[:,board.turn]
-            #cost_func = -prob[:,board.turn] + prob[:,-board.turn]
-            cost_func = -( np.exp(log_prob[:,board.turn]) \
-                                - np.exp(log_prob[:,-board.turn]) )
-            move = legal_moves[np.argmin(cost_func)]
+            # Calculated expected return (+1 for win, -1 for loss, 0 for draw)
+            expct_return =  np.exp(log_prob[:,board.turn]) \
+                                - np.exp(log_prob[:,-board.turn])
+
+            if (self.learning and (np.random.rand() < self.selectivity)):
+                move = np.random.choice(legal_moves)
+            else:
+                move = legal_moves[np.argmax(expct_return)]
+                
+            #select_prob = np.exp(expct_return/self.selectivity)
+            #select_prob /= np.sum(select_prob)
+            #move = np.random.choice(legal_moves, p=select_prob)
 
         # Store the board for learning later
         board.move(move)
@@ -497,13 +506,14 @@ class LearningNoughtsAndCrossesPlayer(Player):
         """
         Update net.
         """
-        # Parse the game history to make training data
-        states = np.array(self._game_history)
-        states = self.symmetric_equivalents(states)
-        outputs = winner*np.ones(states.shape[0], dtype=int)
+        if self.learning:
+            # Parse the game history to make training data
+            states = np.array(self._game_history)
+            states = self.symmetric_equivalents(states)
+            outputs = winner*np.ones(states.shape[0], dtype=int)
 
-        # Update the net
-        self.neural_net.update(states/self.input_scale, outputs)
+            # Update the net
+            self.neural_net.update(states/self.input_scale, outputs)
 
     def notify(self, event, info):
         """

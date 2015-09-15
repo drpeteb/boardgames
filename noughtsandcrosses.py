@@ -427,10 +427,11 @@ class LearningNoughtsAndCrossesPlayer(Player):
         Create the player.
         """
         self.name = name
+        self.input_scale = 16.0
         self.neural_net = BoardgameNeuralNet(num_inputs=9,
                                              num_hidden_layers=2,
-                                             num_hidden_units=[200,200],
-                                             step_size=3E-1,
+                                             num_hidden_units=[100,100],
+                                             step_size=1E-1,
                                              regulariser=1E-2)
 
     def move(self, board):
@@ -438,7 +439,7 @@ class LearningNoughtsAndCrossesPlayer(Player):
         Obtain a move.
         """
         legal_moves = board.permitted_moves
-        prob = np.zeros((len(legal_moves),3))
+        log_prob = np.zeros((len(legal_moves),3))
         options = dict()
         for st in self.strategies:
             options[st] = []
@@ -464,8 +465,8 @@ class LearningNoughtsAndCrossesPlayer(Player):
                 options['win'].append(mv)
 
             # Estimate probability of winning
-            state = board.turn * bd.state.flatten()[np.newaxis,:]
-            prob[mm,:] = self.neural_net.predict(state/16.0)
+            state = bd.state.flatten()[np.newaxis,:]
+            log_prob[mm,:] = self.neural_net.predict(state/self.input_scale)
             
             #print("Log-probability of 0/+1/-1 victory if I make move {} "
             #      "is {}/{}/{}.".format(state, *prob[mm,:]))
@@ -479,7 +480,12 @@ class LearningNoughtsAndCrossesPlayer(Player):
 
         if move is None:
             # Select the move which minimises the probability of losing
-            move = legal_moves[np.argmin(prob[:,-board.turn])]
+            #cost_func = prob[:,-board.turn]
+            #cost_func = -prob[:,board.turn]
+            #cost_func = -prob[:,board.turn] + prob[:,-board.turn]
+            cost_func = -( np.exp(log_prob[:,board.turn]) \
+                                - np.exp(log_prob[:,-board.turn]) )
+            move = legal_moves[np.argmin(cost_func)]
 
         # Store the board for learning later
         board.move(move)
@@ -497,7 +503,7 @@ class LearningNoughtsAndCrossesPlayer(Player):
         outputs = winner*np.ones(states.shape[0], dtype=int)
 
         # Update the net
-        self.neural_net.update(states/16.0, outputs)
+        self.neural_net.update(states/self.input_scale, outputs)
 
     def notify(self, event, info):
         """

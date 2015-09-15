@@ -7,7 +7,7 @@ from noughtsandcrosses import (NoughtsAndCrossesGame,
                                NaiveNoughtsAndCrossesPlayer,
                                LearningNoughtsAndCrossesPlayer)
 
-np.random.seed(seed=0)
+np.random.seed(seed=1)
 
 player1 = NaiveNoughtsAndCrossesPlayer("Hubert")
 player2 = LearningNoughtsAndCrossesPlayer("Franklin")
